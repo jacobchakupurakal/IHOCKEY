@@ -14,9 +14,7 @@ app.get("/healthz", (req, res) => {
 });
 
 // Optional root route
-app.get("/", (req, res) => {
-    res.send("NEON_STRIKE server running 🚀");
-});
+app.use(express.static("public"));
 
 const io = new Server(server, {
     cors: { origin: "*" }
