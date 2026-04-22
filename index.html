@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>NEON_STRIKE // ELITE EDITION</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body { 
+            background: #050505; 
+            color: #00ffcc; 
+            font-family: 'Consolas', monospace; 
+            margin: 0; 
+            overflow: hidden; 
+            text-align: center;
+        }
+        .header { 
+            padding: 10px; 
+            border-bottom: 1px solid #1a1a1a; 
+            background: rgba(0,0,0,0.9); 
+            position: relative;
+            z-index: 10;
+        }
+        .score-board { 
+            font-size: 42px; 
+            font-weight: 900; 
+            letter-spacing: 5px; 
+        }
+        #status { 
+            font-size: 12px; 
+            color: #444; 
+            margin-top: 5px; 
+        }
+        canvas { 
+            border: 5px solid #111; 
+            background: radial-gradient(circle, #111 0%, #000 100%);
+            box-shadow: 0 0 40px rgba(0, 255, 204, 0.1);
+            margin-top: 20px;
+            display: block;
+            margin: 20px auto 0;
+        }
+        #lobby {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(5,5,5,0.97);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            color: #00ffcc;
+            font-family: 'Consolas', monospace;
+        }
+        .lobby-container {
+            display: flex;
+            gap: 120px;
+            max-width: 1100px;
+        }
+        .player-panel {
+            background: rgba(20,20,20,0.6);
+            border: 2px solid;
+            padding: 30px 40px;
+            border-radius: 12px;
+            width: 340px;
+            text-align: left;
+        }
+        .p1-panel { border-color: #00f2ff; }
+        .p2-panel { border-color: #ff0055; }
+        .color-picker {
+            display: flex;
+            gap: 12px;
+            margin: 15px 0;
+        }
+        .color-btn {
+            width: 54px; height: 54px;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 20px 4px;
+            transition: all 0.2s;
+        }
+        .color-btn:hover { transform: scale(1.15); }
+        .ability-btn {
+            padding: 12px 20px;
+            margin: 6px 0;
+            background: #111;
+            border: 2px solid #333;
+            color: #fff;
+            cursor: pointer;
+            font-size: 15px;
+            transition: all 0.2s;
+        }
+        .ability-btn.active {
+            border-color: #00ffcc;
+            box-shadow: 0 0 20px #00ffcc;
+        }
+        button#ready-btn {
+            margin-top: 40px;
+            padding: 18px 60px;
+            font-size: 24px;
+            font-weight: 900;
+            letter-spacing: 4px;
+            background: #111;
+            color: #00ffcc;
+            border: 3px solid #00ffcc;
+            cursor: pointer;
+            box-shadow: 0 0 30px #00ffcc;
+        }
+        button#ready-btn:hover {
+            background: #00ffcc;
+            color: #050505;
+        }
+        .status-bar {
+            margin-top: 30px;
+            font-size: 18px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="score-board">
+            <span id="p1-score" style="color: #00f2ff; text-shadow: 0 0 15px #00f2ff;">0</span>
+            <span style="color: #333;"> : </span>
+            <span id="p2-score" style="color: #ff0055; text-shadow: 0 0 15px #ff0055;">0</span>
+        </div>
+        <div id="status">CONNECTING TO NEURAL LINK...</div>
+    </div>
+
+    <canvas id="hockeyCanvas" width="900" height="500"></canvas>
+
+    <!-- LOBBY SCREEN -->
+    <div id="lobby">
+        <h1 style="font-size:42px; margin-bottom:10px; letter-spacing:8px;">NEON_STRIKE</h1>
+        <div style="color:#ffd700; font-size:18px; margin-bottom:30px;">ELITE LOBBY • CHOOSE YOUR BUILD</div>
+        
+        <div class="lobby-container">
+            <!-- PLAYER 1 PANEL -->
+            <div class="player-panel p1-panel" id="panel-p1">
+                <div style="text-align:center; margin-bottom:15px;">
+                    <span style="background:#00f2ff; color:#000; padding:2px 12px; border-radius:4px; font-size:13px;">YOU</span>
+                    <h2 id="my-role" style="margin:8px 0 0 0; color:#00f2ff;">P1 • BLUE NEON</h2>
+                </div>
+                
+                <div style="margin:20px 0 8px; color:#aaa;">AURA PALETTE</div>
+                <div class="color-picker" id="color-picker-p1"></div>
+                
+                <div style="margin:25px 0 8px; color:#aaa;">PASSIVE MOD</div>
+                <div id="ability-picker-p1"></div>
+            </div>
+
+            <!-- PLAYER 2 PANEL -->
+            <div class="player-panel p2-panel" id="panel-p2">
+                <div style="text-align:center; margin-bottom:15px;">
+                    <span style="background:#ff0055; color:#000; padding:2px 12px; border-radius:4px; font-size:13px;">OPPONENT</span>
+                    <h2 id="opponent-role" style="margin:8px 0 0 0; color:#ff0055;">P2 • RED NEON</h2>
+                </div>
+                
+                <div style="margin:20px 0 8px; color:#aaa;">AURA PALETTE</div>
+                <div class="color-picker" id="color-picker-p2" style="opacity:0.4; pointer-events:none;"></div>
+                
+                <div style="margin:25px 0 8px; color:#aaa;">PASSIVE MOD</div>
+                <div id="ability-picker-p2" style="opacity:0.4; pointer-events:none;"></div>
+            </div>
+        </div>
+
+        <button id="ready-btn">READY UP</button>
+        
+        <div class="status-bar" id="lobby-status">
+            WAITING FOR OPPONENT...
+        </div>
+    </div>
+
+<script>
+// ==================== CONFIG ====================
+const ABILITIES = {
+    engine: { name: "ENGINE", desc: "15% faster • smaller paddle", speedMult: 1.18, sizeMult: 0.82, chargeMult: 1.0, shotMult: 0.95, catchMult: 1.0 },
+    magnet: { name: "MAGNET", desc: "Ball sticks easier • faster charge", speedMult: 0.95, sizeMult: 1.05, chargeMult: 1.18, shotMult: 1.0, catchMult: 1.38 },
+    heavy: { name: "HEAVY HITTER", desc: "25% stronger shots • slower charge", speedMult: 0.9, sizeMult: 1.08, chargeMult: 0.82, shotMult: 1.28, catchMult: 0.9 }
+};
+
+const COLOR_PRESETS = [
+    { name: "PLASMA", p1: "#00f2ff", p2: "#ff0055" },
+    { name: "TOXIC",   p1: "#39ff14", p2: "#c300ff" },
+    { name: "VOLTAGE", p1: "#ffd700", p2: "#ffffff" }
+];
+
+// ==================== CORE ====================
+const socket = io('http://localhost:3000');
+const canvas = document.getElementById('hockeyCanvas');
+const ctx = canvas.getContext('2d');
+
+let gameState = 'lobby';
+let myRole = null;
+let scores = { p1: 0, p2: 0 };
+let gameOver = false;
+let maxScore = 5;
+const keys = {};
+
+let audioCtx;
+let shakeAmount = 0;
+let nearMissFlash = 0;
+let streaks = { p1: 0, p2: 0 };
+let lastScorer = null;
+let lastNearMiss = 0;
+let lastShotTime = 0;
+
+// Player objects
+let p1 = { x: 100, y: 250, size: 28, speed: 7, color: '#00f2ff', power: 0, charging: false, vx: 0, vy: 0, catchMult: 1.0, chargeMult: 1.0, shotMult: 1.0 };
+let p2 = { x: 800, y: 250, size: 28, speed: 7, color: '#ff0055', power: 0, charging: false, vx: 0, vy: 0, catchMult: 1.0, chargeMult: 1.0, shotMult: 1.0 };
+
+const ball = { x: 450, y: 250, dx: 0, dy: 0, radius: 10, holder: null, isCritical: false };
+
+// Trails
+let p1Trail = [];
+let p2Trail = [];
+
+const goalHeight = 160;
+const goalTop = (500 - goalHeight) / 2;
+const goalBottom = goalTop + goalHeight;
+
+// LocalStorage defaults
+let savedColorIndex = parseInt(localStorage.getItem('neonColorIndex')) || 0;
+let savedAbility = localStorage.getItem('neonAbility') || 'engine';
+
+// ==================== AUDIO ====================
+function playHit() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator(); osc.frequency.setValueAtTime(140, audioCtx.currentTime); osc.type = 'sawtooth';
+    const gain = audioCtx.createGain(); gain.gain.value = 0.35;
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.12); osc.stop(audioCtx.currentTime + 0.18);
+}
+function playGoal() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc1 = audioCtx.createOscillator(); osc1.frequency.setValueAtTime(987, audioCtx.currentTime);
+    const gain1 = audioCtx.createGain(); gain1.gain.value = 0.6;
+    osc1.connect(gain1).connect(audioCtx.destination); osc1.start(); gain1.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.35); osc1.stop(audioCtx.currentTime + 0.45);
+    setTimeout(() => {
+        const osc2 = audioCtx.createOscillator(); osc2.frequency.setValueAtTime(659, audioCtx.currentTime);
+        const gain2 = audioCtx.createGain(); gain2.gain.value = 0.5;
+        osc2.connect(gain2).connect(audioCtx.destination); osc2.start(); gain2.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3); osc2.stop(audioCtx.currentTime + 0.4);
+    }, 40);
+}
+function playClang() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator(); osc.frequency.setValueAtTime(420, audioCtx.currentTime); osc.type = 'triangle';
+    const gain = audioCtx.createGain(); gain.gain.value = 0.7;
+    osc.connect(gain).connect(audioCtx.destination); osc.start(); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.09); osc.stop(audioCtx.currentTime + 0.12);
+    const osc2 = audioCtx.createOscillator(); osc2.frequency.setValueAtTime(1180, audioCtx.currentTime); osc2.type = 'sine';
+    const gain2 = audioCtx.createGain(); gain2.gain.value = 0.4;
+    osc2.connect(gain2).connect(audioCtx.destination); osc2.start(); gain2.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.22); osc2.stop(audioCtx.currentTime + 0.28);
+}
+
+// ==================== SOCKETS ====================
+socket.on('playerAssign', (role) => {
+    myRole = role;
+    document.getElementById('my-role').innerHTML = `${role.toUpperCase()} • <span style="color:${p1.color}">YOU</span>`;
+    document.getElementById('status').innerText = `NEURAL LINK • ROLE: ${role.toUpperCase()}`;
+});
+
+socket.on('lobbyUpdate', (lobbyData) => {
+    if (gameState !== 'lobby') return;
+    
+    const opponent = lobbyData.find(p => p.role !== myRole);
+    if (opponent) {
+        document.getElementById('opponent-role').innerHTML = `${opponent.role.toUpperCase()} • <span style="color:${opponent.color}">${opponent.ability.toUpperCase()}</span>`;
+        document.getElementById('color-picker-p2').innerHTML = `<div class="color-btn" style="background:${opponent.color}; box-shadow:0 0 20px ${opponent.color}"></div>`;
+        document.getElementById('ability-picker-p2').innerHTML = `<div class="ability-btn active" style="width:100%">${ABILITIES[opponent.ability].name}<br><small>${ABILITIES[opponent.ability].desc}</small></div>`;
+        
+        const bothReady = lobbyData.every(p => p.ready);
+        document.getElementById('lobby-status').innerHTML = bothReady ? 
+            `<span style="color:#ffd700">BOTH READY • GAME STARTING...</span>` : 
+            `OPPONENT ${opponent.ready ? 'IS READY' : 'IS CHOOSING'}...`;
+    }
+});
+
+socket.on('gameStart', (data) => {
+    const p1Data = data.p1;
+    const p2Data = data.p2;
+    
+    p1.color = p1Data.color;
+    p1.size = 28 * ABILITIES[p1Data.ability].sizeMult;
+    p1.speed = 7 * ABILITIES[p1Data.ability].speedMult;
+    p1.catchMult = ABILITIES[p1Data.ability].catchMult;
+    p1.chargeMult = ABILITIES[p1Data.ability].chargeMult;
+    p1.shotMult = ABILITIES[p1Data.ability].shotMult;
+    
+    p2.color = p2Data.color;
+    p2.size = 28 * ABILITIES[p2Data.ability].sizeMult;
+    p2.speed = 7 * ABILITIES[p2Data.ability].speedMult;
+    p2.catchMult = ABILITIES[p2Data.ability].catchMult;
+    p2.chargeMult = ABILITIES[p2Data.ability].chargeMult;
+    p2.shotMult = ABILITIES[p2Data.ability].shotMult;
+    
+    gameState = 'playing';
+    gameOver = false;
+    scores = { p1: 0, p2: 0 };
+    streaks = { p1: 0, p2: 0 };
+    resetArena();
+    p1Trail = []; p2Trail = [];
+    
+    document.getElementById('lobby').style.display = 'none';
+    document.getElementById('status').innerText = `MATCH STARTED • ${myRole.toUpperCase()}`;
+});
+
+socket.on('opponentUpdate', (data) => {
+    if (gameState !== 'playing') return;
+    
+    if (myRole === 'p1') {
+        p2.x = data.x !== undefined ? data.x : p2.x;
+        p2.y = data.y !== undefined ? data.y : p2.y;
+        p2.vx = data.vx || 0;
+        p2.vy = data.vy || 0;
+        p2.charging = data.charging;
+        p2.power = data.power;
+        
+        if (!ball.holder && Math.hypot(ball.x - p2.x, ball.y - p2.y) < 48 * p2.catchMult) {
+            ball.holder = 'p2';
+            playHit();
+        }
+        
+        if (data.shootRequest && ball.holder === 'p2') {
+            ball.holder = null;
+            const s = data.shotPower;
+            const shotDx = data.shotDx || 0;
+            const shotDy = data.shotDy || 0;
+            ball.dx = -s + shotDx;
+            ball.dy = shotDy;
+            ball.isCritical = data.shotIsCritical !== undefined ? data.shotIsCritical : (Math.random() < 0.05);
+            if (ball.isCritical) {
+                ball.dx *= 1.5;
+                ball.dy *= 1.5;
+            }
+            ball.x -= 18;
+        }
+    } else {
+        p1.x = data.x !== undefined ? data.x : p1.x;
+        p1.y = data.y !== undefined ? data.y : p1.y;
+        p1.vx = data.vx || 0;
+        p1.vy = data.vy || 0;
+        p1.charging = data.charging;
+        p1.power = data.power;
+        
+        if (data.ball) {
+            if (Date.now() - lastShotTime > 180) {
+        const wasHolding = !!ball.holder;
+        Object.assign(ball, data.ball);
+
+        if (!wasHolding && ball.holder) {
+            playHit();
+        }
+    }
+}
+        if (data.scores) {
+            const changed = scores.p1 !== data.scores.p1 || scores.p2 !== data.scores.p2;
+    scores = data.scores;
+
+    if (changed) playGoal();
+
+    if (scores.p1 >= maxScore || scores.p2 >= maxScore) {
+        gameOver = true;
+    }
+           }
+        if (data.effects) {
+            shakeAmount = data.effects.shake || 0;
+
+    streaks.p1 = data.effects.streakP1 || 0;
+    streaks.p2 = data.effects.streakP2 || 0;
+
+    if (data.effects.nearMissActive && Date.now() - lastNearMiss > 400) {
+        playClang();
+        lastNearMiss = Date.now();
+        nearMissFlash = Date.now() + 320;
+    }
+}
+    }
+});
+
+socket.on('backToLobby', () => {
+    gameState = 'lobby';
+    gameOver = false;
+    document.getElementById('lobby').style.display = 'flex';
+    document.getElementById('ready-btn').textContent = 'READY UP';
+    resetArena();
+    scores = { p1: 0, p2: 0 };
+    streaks = { p1: 0, p2: 0 };
+    p1Trail = []; p2Trail = [];
+});
+
+// ==================== LOBBY UI SETUP ====================
+function createLobbyUI() {
+    const cp1 = document.getElementById('color-picker-p1');
+    COLOR_PRESETS.forEach((preset, i) => {
+        const btn = document.createElement('div');
+        btn.className = 'color-btn';
+        btn.style.background = preset.p1;
+        btn.style.boxShadow = `0 0 20px 4px ${preset.p1}`;
+        btn.onclick = () => {
+            savedColorIndex = i;
+            localStorage.setItem('neonColorIndex', i);
+            socket.emit('setColor', preset.p1);
+            cp1.querySelectorAll('.color-btn').forEach(b => b.style.opacity = (b.style.background === preset.p1) ? '1' : '0.4');
+        };
+        cp1.appendChild(btn);
+    });
+    
+    const ap1 = document.getElementById('ability-picker-p1');
+    Object.keys(ABILITIES).forEach(key => {
+        const ab = ABILITIES[key];
+        const btn = document.createElement('div');
+        btn.className = 'ability-btn';
+        btn.innerHTML = `${ab.name}<br><small>${ab.desc}</small>`;
+        btn.onclick = () => {
+            savedAbility = key;
+            localStorage.setItem('neonAbility', key);
+            socket.emit('setAbility', key);
+            ap1.querySelectorAll('.ability-btn').forEach(b => b.classList.toggle('active', b === btn));
+        };
+        if (key === savedAbility) btn.classList.add('active');
+        ap1.appendChild(btn);
+    });
+    
+    const readyBtn = document.getElementById('ready-btn');
+    let isReady = false;
+    readyBtn.onclick = () => {
+        isReady = !isReady;
+        readyBtn.textContent = isReady ? '✓ READY' : 'READY UP';
+        readyBtn.style.background = isReady ? '#00ffcc' : '#111';
+        readyBtn.style.color = isReady ? '#050505' : '#00ffcc';
+        socket.emit('setReady', isReady);
+    };
+}
+
+// ==================== INPUT ====================
+window.addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true; });
+window.addEventListener('keyup', e => {
+    const me = myRole === 'p1' ? p1 : p2;
+    if (e.key.toLowerCase() === 'j' && me.charging) {
+        let s = (8 + (me.power / 8)) * me.shotMult;
+        const shotDx = (me.vx || 0) * 0.9;
+        const shotDy = (me.vy || 0) * 1.3 + (Math.random() - 0.5) * 6;
+        
+        if (myRole === 'p1' && ball.holder === 'p1') {
+            ball.holder = null;
+            let isCritical = Math.random() < 0.05;
+            ball.dx = s + shotDx;
+            ball.dy = shotDy;
+            if (isCritical) {
+                ball.isCritical = true;
+                ball.dx *= 1.5;
+                ball.dy *= 1.5;
+            } else ball.isCritical = false;
+            ball.x += 18;
+        } else if (myRole === 'p2' && ball.holder === 'p2') {
+            let isCritical = Math.random() < 0.05;
+            socket.emit('updateState', {
+                x: p2.x, y: p2.y, vx: p2.vx || 0, vy: p2.vy || 0,
+                charging: false, power: 0,
+                shootRequest: true, shotPower: s, shotDx, shotDy,
+                shotIsCritical: isCritical
+            });
+            ball.holder = null;
+            ball.dx = -s + shotDx;
+            ball.dy = shotDy;
+            ball.isCritical = isCritical;
+            if (isCritical) {
+                ball.dx *= 1.5;
+                ball.dy *= 1.5;
+            }
+            ball.x -= 18;
+            lastShotTime = Date.now();
+        }
+        me.charging = false;
+        me.power = 0;
+    }
+    keys[e.key.toLowerCase()] = false;
+});
+
+// ==================== GAME LOGIC ====================
+function update() {
+    if (myRole !== 'p1') {
+
+    // Predict catching
+    if (!ball.holder && Math.hypot(ball.x - p2.x, ball.y - p2.y) < 48 * p2.catchMult) {
+        ball.holder = 'p2';
+        playHit();
+    }
+
+    // 🔥 CRITICAL: BALL FREE-FLIGHT PREDICTION (this was missing)
+    if (!ball.holder) {
+        ball.x += ball.dx;
+        ball.y += ball.dy;
+
+        ball.dx *= 0.985;
+        ball.dy *= 0.985;
+
+        if (ball.y < 15 || ball.y > 485) {
+            ball.dy *= -1;
+        }
+    }
+}
+    if (gameState !== 'playing' || gameOver) return;
+    const me = myRole === 'p1' ? p1 : p2;
+
+    // Movement + velocity
+    if (myRole === 'p1') {
+        p1.vx = 0; p1.vy = 0;
+        if (keys['w'] && p1.y > p1.size) { p1.y -= p1.speed; p1.vy -= p1.speed; }
+        if (keys['s'] && p1.y < 500 - p1.size) { p1.y += p1.speed; p1.vy += p1.speed; }
+        if (keys['a'] && p1.x > p1.size) { p1.x -= p1.speed; p1.vx -= p1.speed; }
+        if (keys['d'] && p1.x < 420) { p1.x += p1.speed; p1.vx += p1.speed; }
+    } else {
+        p2.vx = 0; p2.vy = 0;
+        if (keys['arrowup'] && p2.y > p2.size) { p2.y -= p2.speed; p2.vy -= p2.speed; }
+        if (keys['arrowdown'] && p2.y < 500 - p2.size) { p2.y += p2.speed; p2.vy += p2.speed; }
+        if (keys['arrowleft'] && p2.x > 480) { p2.x -= p2.speed; p2.vx -= p2.speed; }
+        if (keys['arrowright'] && p2.x < 900 - p2.size) { p2.x += p2.speed; p2.vx += p2.speed; }
+    }
+
+    if (keys['j'] && ball.holder === myRole) {
+        me.charging = true;
+        me.power = Math.min(me.power + 2.5 * me.chargeMult, 100);
+    }
+
+    // MASTER PHYSICS (P1 ONLY) — unchanged
+    if (myRole === 'p1') {
+        if (!ball.holder) {
+            if (Math.hypot(ball.x - p1.x, ball.y - p1.y) < 48 * p1.catchMult) {
+                ball.holder = 'p1';
+                playHit();
+            }
+            if (Math.hypot(ball.x - p2.x, ball.y - p2.y) < 48 * p2.catchMult) {
+                ball.holder = 'p2';
+                playHit();
+            }
+        }
+
+        if (ball.holder) {
+            const h = ball.holder === 'p1' ? p1 : p2;
+            ball.x = h.x + (ball.holder === 'p1' ? 35 : -35);
+            ball.y = h.y;
+            ball.dx = 0; ball.dy = 0;
+        } else {
+            ball.x += ball.dx; ball.y += ball.dy;
+            ball.dx *= 0.985; ball.dy *= 0.985;
+
+            if (ball.y < 15 || ball.y > 485) ball.dy *= -1;
+
+            if (ball.x < 20) {
+                if (ball.y > goalTop && ball.y < goalBottom) {
+                    scores.p2++;
+                    handleScore('p2');
+                } else {
+                    ball.dx *= -1.1; ball.x = 21;
+                    if (Math.abs(ball.y - goalTop) < 22 || Math.abs(ball.y - goalBottom) < 22) {
+                        if (Date.now() - lastNearMiss > 400) { playClang(); lastNearMiss = Date.now(); nearMissFlash = Date.now() + 320; shakeAmount = 9; }
+                    } else if (Math.abs(ball.dx) > 14) shakeAmount = 7;
+                }
+            }
+            if (ball.x > 880) {
+                if (ball.y > goalTop && ball.y < goalBottom) {
+                    scores.p1++;
+                    handleScore('p1');
+                } else {
+                    ball.dx *= -1.1; ball.x = 879;
+                    if (Math.abs(ball.y - goalTop) < 22 || Math.abs(ball.y - goalBottom) < 22) {
+                        if (Date.now() - lastNearMiss > 400) { playClang(); lastNearMiss = Date.now(); nearMissFlash = Date.now() + 320; shakeAmount = 9; }
+                    } else if (Math.abs(ball.dx) > 14) shakeAmount = 7;
+                }
+            }
+        }
+        
+        if (Math.random() < 0.7) {
+            p1Trail.push({x: p1.x, y: p1.y, life: 22});
+            p2Trail.push({x: p2.x, y: p2.y, life: 22});
+        }
+    } else {
+        // P2 only needs local catch prediction (no full physics — server drives everything)
+        if (!ball.holder && Math.hypot(ball.x - p2.x, ball.y - p2.y) < 48 * p2.catchMult) {
+            ball.holder = 'p2';
+            playHit();
+        }
+    }
+
+    // CLIENT-SIDE HOLDING PREDICTION (both players)
+    if (ball.holder === myRole) {
+        const h = myRole === 'p1' ? p1 : p2;
+
+    ball.x = h.x + (myRole === 'p1' ? 35 : -35);
+    ball.y = h.y;
+
+    ball.dx = 0;
+    ball.dy = 0;
+}
+    // Send state
+    const meLocal = myRole === 'p1' ? p1 : p2;
+    socket.emit('updateState', {
+    x: meLocal.x,
+    y: meLocal.y,
+    vx: meLocal.vx || 0,
+    vy: meLocal.vy || 0,
+    charging: meLocal.charging,
+    power: meLocal.power,
+
+    // ONLY P1 SENDS AUTHORITATIVE STATE
+    ball: myRole === 'p1' ? ball : null,
+    scores: myRole === 'p1' ? scores : null,
+
+    effects: myRole === 'p1' ? {
+        shake: Math.max(0, Math.floor(shakeAmount)),
+        streakP1: streaks.p1,
+        streakP2: streaks.p2,
+        nearMissActive: nearMissFlash > Date.now()
+    } : null
+});
+}
+
+function handleScore(scorer) {
+    streaks[scorer] = (lastScorer === scorer) ? streaks[scorer] + 1 : 1;
+    lastScorer = scorer;
+    shakeAmount = 19;
+    playGoal();
+    if (scores.p1 >= maxScore || scores.p2 >= maxScore) gameOver = true;
+    resetArena();
+}
+
+function resetArena() {
+    ball.x = 450; ball.y = 250; ball.dx = 0; ball.dy = 0; ball.holder = null; ball.isCritical = false;
+    lastShotTime = 0;
+}
+
+// ==================== DRAW ====================
+function drawGrid() {
+    ctx.globalAlpha = 0.08;
+    ctx.strokeStyle = '#00ffcc';
+    ctx.lineWidth = 1.5;
+    const pulse = Math.sin(Date.now() / 280) * 6;
+    for (let y = 30; y < 470; y += 38) {
+        ctx.beginPath();
+        ctx.moveTo(30, y);
+        ctx.lineTo(870, y + pulse * ((y - 250) / 250));
+        ctx.stroke();
+    }
+    for (let x = 30; x < 870; x += 38) {
+        ctx.beginPath();
+        ctx.moveTo(x, 30);
+        ctx.lineTo(x + pulse * ((x - 450) / 450), 470);
+        ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+}
+
+function draw() {
+    ctx.clearRect(0, 0, 900, 500);
+    
+    if (gameState === 'lobby') {
+        requestAnimationFrame(draw);
+        return;
+    }
+    
+    ctx.save();
+    
+    if (shakeAmount > 0) {
+        ctx.translate((Math.random() - 0.5) * shakeAmount, (Math.random() - 0.5) * shakeAmount);
+        shakeAmount *= 0.89;
+        if (shakeAmount < 0.6) shakeAmount = 0;
+    }
+    
+    drawGrid();
+    
+    ctx.globalCompositeOperation = 'lighter';
+    
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "#00f2ff"; ctx.strokeRect(-10, goalTop, 30, goalHeight);
+    ctx.strokeStyle = "#ff0055"; ctx.strokeRect(880, goalTop, 30, goalHeight);
+    
+    ctx.strokeStyle = "rgba(255,255,255,0.07)";
+    ctx.beginPath(); ctx.arc(450, 250, 68, 0, Math.PI * 2); ctx.stroke();
+    ctx.moveTo(450, 0); ctx.lineTo(450, 500); ctx.stroke();
+    
+    // Trails
+    ctx.shadowBlur = 0;
+    [p1Trail, p2Trail].forEach((trail, i) => {
+        const col = i === 0 ? p1.color : p2.color;
+        for (let j = trail.length - 1; j >= 0; j--) {
+            const t = trail[j];
+            ctx.globalAlpha = t.life / 24;
+            ctx.fillStyle = col;
+            ctx.fillRect(t.x - 4, t.y - 4, 8, 8);
+            t.life--;
+            if (t.life <= 0) trail.splice(j, 1);
+        }
+    });
+    ctx.globalAlpha = 1;
+    
+    // Players with reactive neon edge
+    [p1, p2].forEach(p => {
+        const isP1 = p === p1;
+        const streakKey = isP1 ? 'p1' : 'p2';
+        
+        ctx.shadowBlur = 22;
+        ctx.shadowColor = p.color;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        
+        if (streaks[streakKey] >= 2) {
+            ctx.shadowBlur = 32;
+            ctx.shadowColor = '#00ffff';
+            ctx.strokeStyle = '#00ffff';
+            ctx.lineWidth = 5;
+            ctx.beginPath(); ctx.moveTo(p.x - 24, p.y - p.size - 6); ctx.quadraticCurveTo(p.x - 38, p.y - p.size - 32, p.x - 14, p.y - p.size - 50); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(p.x + 24, p.y - p.size - 6); ctx.quadraticCurveTo(p.x + 38, p.y - p.size - 32, p.x + 14, p.y - p.size - 50); ctx.stroke();
+        }
+        
+        ctx.shadowBlur = 14 + Math.sin(Date.now() / 70) * 8;
+        ctx.shadowColor = p.color;
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 6;
+        ctx.globalAlpha = 0.75;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size + 6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        
+        if (p.charging) {
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = "#fff";
+            ctx.fillRect(p.x - 26, p.y - 52, p.power / 2.3, 8);
+        }
+    });
+    
+    // Ball
+    ctx.shadowBlur = ball.isCritical ? 38 : 14;
+    ctx.shadowColor = ball.isCritical ? '#ffd700' : '#fff';
+    ctx.fillStyle = ball.isCritical ? '#ffd700' : '#fff';
+    ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2); ctx.fill();
+    if (ball.isCritical) {
+        ctx.shadowBlur = 12;
+        ctx.fillStyle = 'rgba(255,215,0,0.7)';
+        ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.radius + 8, 0, Math.PI * 2); ctx.fill();
+    }
+    
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.restore();
+    
+    if (nearMissFlash > Date.now()) {
+        const alpha = 0.38 * (Math.sin(Date.now() / 55) * 0.6 + 0.4);
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = '#ff2244';
+        ctx.fillRect(0, 0, 900, 500);
+        ctx.restore();
+        
+        ctx.save();
+        ctx.fillStyle = '#ff6666';
+        ctx.font = '900 36px Consolas';
+        ctx.textAlign = 'center';
+        ctx.shadowBlur = 18; ctx.shadowColor = '#ff0000';
+        ctx.fillText('NEAR MISS!', 450, 95);
+        ctx.restore();
+    }
+    
+    if (gameOver) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(5,5,5,0.92)';
+        ctx.fillRect(0, 0, 900, 500);
+        
+        ctx.shadowBlur = 35;
+        ctx.shadowColor = '#00ffcc';
+        ctx.fillStyle = '#00ffcc';
+        ctx.font = '900 54px Consolas';
+        ctx.textAlign = 'center';
+        ctx.fillText('MATCH COMPLETE', 450, 175);
+        
+        const winner = scores.p1 >= maxScore ? 'BLUE NEON' : 'RED NEON';
+        ctx.shadowBlur = 28;
+        ctx.shadowColor = scores.p1 >= maxScore ? '#00f2ff' : '#ff0055';
+        ctx.fillStyle = scores.p1 >= maxScore ? '#00f2ff' : '#ff0055';
+        ctx.font = '900 48px Consolas';
+        ctx.fillText(`${winner} VICTORY`, 450, 255);
+        
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 28px Consolas';
+        ctx.fillText('CLICK FOR REMATCH', 450, 340);
+        ctx.restore();
+    }
+    
+    document.getElementById('p1-score').innerText = scores.p1;
+    document.getElementById('p2-score').innerText = scores.p2;
+    
+    update();
+    requestAnimationFrame(draw);
+}
+
+// ==================== START ====================
+createLobbyUI();
+canvas.addEventListener('click', () => {
+    if (gameOver) socket.emit('requestRematch');
+});
+draw();
+</script>
+</body>
+</html>

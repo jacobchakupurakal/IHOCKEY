@@ -1,0 +1,79 @@
+const { Server } = require("socket.io");
+const io = new Server(3000, { cors: { origin: "*" } });
+
+let players = {};
+let gameState = "lobby";
+
+io.on("connection", (socket) => {
+    console.log("→ Player connected:", socket.id);
+    
+    if (Object.keys(players).length >= 2) {
+        socket.emit("full");
+        socket.disconnect();
+        return;
+    }
+    
+    const role = Object.keys(players).length === 0 ? "p1" : "p2";
+    players[socket.id] = {
+        id: socket.id,
+        role: role,
+        ready: false,
+        color: role === "p1" ? "#00f2ff" : "#ff0055",
+        ability: "engine"
+    };
+    
+    socket.emit("playerAssign", role);
+    broadcastLobby();
+    
+    socket.on("setColor", (color) => {
+        if (players[socket.id]) players[socket.id].color = color;
+        broadcastLobby();
+    });
+    
+    socket.on("setAbility", (ability) => {
+        if (players[socket.id] && ABILITIES[ability]) players[socket.id].ability = ability;
+        broadcastLobby();
+    });
+    
+    socket.on("setReady", (ready) => {
+        if (players[socket.id]) players[socket.id].ready = ready;
+        broadcastLobby();
+        
+        const all = Object.values(players);
+        if (all.length === 2 && all.every(p => p.ready)) {
+            gameState = "playing";
+            io.emit("gameStart", { p1: all.find(p => p.role === "p1"), p2: all.find(p => p.role === "p2") });
+        }
+    });
+    
+    socket.on("updateState", (data) => {
+        if (gameState !== "playing") return;
+        socket.broadcast.emit("opponentUpdate", data);
+    });
+    
+    socket.on("requestRematch", () => {
+        gameState = "lobby";
+        Object.values(players).forEach(p => p.ready = false);
+        io.emit("backToLobby");
+    });
+    
+    socket.on("disconnect", () => {
+        delete players[socket.id];
+        if (Object.keys(players).length === 0) gameState = "lobby";
+        broadcastLobby();
+    });
+});
+
+const ABILITIES = { engine:1, magnet:1, heavy:1 };
+
+function broadcastLobby() {
+    const data = Object.values(players).map(p => ({
+        role: p.role,
+        ready: p.ready,
+        color: p.color,
+        ability: p.ability
+    }));
+    io.emit("lobbyUpdate", data);
+}
+
+console.log("🚀 NEON_STRIKE server running on http://localhost:3000");
