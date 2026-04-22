@@ -1,5 +1,26 @@
+const express = require("express");
+const http = require("http");
 const { Server } = require("socket.io");
-const io = new Server(3000, { cors: { origin: "*" } });
+
+const app = express();
+const server = http.createServer(app);
+
+// REQUIRED for Render
+const PORT = process.env.PORT || 3000;
+
+// Health check route (VERY IMPORTANT)
+app.get("/healthz", (req, res) => {
+    res.send("OK");
+});
+
+// Optional root route
+app.get("/", (req, res) => {
+    res.send("NEON_STRIKE server running 🚀");
+});
+
+const io = new Server(server, {
+    cors: { origin: "*" }
+});
 
 let players = {};
 let gameState = "lobby";
@@ -42,7 +63,10 @@ io.on("connection", (socket) => {
         const all = Object.values(players);
         if (all.length === 2 && all.every(p => p.ready)) {
             gameState = "playing";
-            io.emit("gameStart", { p1: all.find(p => p.role === "p1"), p2: all.find(p => p.role === "p2") });
+            io.emit("gameStart", { 
+                p1: all.find(p => p.role === "p1"), 
+                p2: all.find(p => p.role === "p2") 
+            });
         }
     });
     
@@ -76,4 +100,7 @@ function broadcastLobby() {
     io.emit("lobbyUpdate", data);
 }
 
-console.log("🚀 NEON_STRIKE server running on http://localhost:3000");
+// START SERVER (IMPORTANT CHANGE)
+server.listen(PORT, () => {
+    console.log("🚀 Server running on port " + PORT);
+});
